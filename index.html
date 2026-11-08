@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Ben's Teleprompter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: full-screen prompter stage with one thin control bar at the bottom; a plain editor sits behind it. */
+  :root {
+    --bg: #0d0f12;
+    --panel: #171a1f;
+    --line: #2b3038;
+    --fg: #f3f1ea;
+    --dim: #9aa1ab;
+    --accent: #f2b84b;
+    --accent-ink: #1a1405;
+    --font-ui: "Inter", -apple-system, "SF Pro Text", system-ui, sans-serif;
+    --font-read: "Atkinson Hyperlegible", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .app { height: 100%; display: flex; flex-direction: column; min-width: 0; }
+
+  /* Editor */
+  #editor { flex: 1; display: flex; flex-direction: column; gap: 12px; padding-block: 16px; min-height: 0; }
+  #editor h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  #editor p { margin: 0; color: var(--dim); font-size: 0.9rem; }
+  #script {
+    flex: 1; min-height: 0; width: 100%;
+    background: var(--panel); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; font: inherit; font-family: var(--font-read);
+    font-size: 1.05rem; line-height: 1.5; resize: none;
+    -webkit-user-select: text; user-select: text;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+
+  button {
+    font: inherit; font-weight: 600; color: var(--fg);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 18px; min-height: 48px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Prompter */
+  #prompter { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  body.running #editor { display: none; }
+  body.running #prompter { display: flex; }
+
+  #stage { position: relative; flex: 1; overflow: hidden; touch-action: none; min-height: 0; }
+  #text {
+    position: absolute; left: 0; right: 0; top: 0;
+    font-family: var(--font-read); font-weight: 700; line-height: 1.35;
+    will-change: transform; padding-inline: 2%;
+  }
+  #text p { margin: 0; }
+  #text .w { transition: opacity .25s; }
+  #text .w.said { opacity: 0.32; }
+  body.voice #text .w:not(.said) { opacity: 1; }
+  button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #voicestat { color: var(--dim); font-size: 0.85rem; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #voicestat.err { color: #ff8d7a; white-space: normal; }
+  #text.mirror { transform-origin: center; }
+  #stage.mirror { transform: scaleX(-1); }
+
+  /* Reading line */
+  #marker {
+    position: absolute; left: 0; right: 0; height: 0; pointer-events: none;
+    border-top: 2px solid rgba(242, 184, 75, 0.55);
+  }
+  #marker::before, #marker::after {
+    content: ""; position: absolute; top: -9px; border: 8px solid transparent;
+  }
+  #marker::before { left: 0; border-left-color: var(--accent); }
+  #marker::after { right: 0; border-right-color: var(--accent); }
+  #count {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: 30vmin; font-weight: 800; color: var(--accent); background: rgba(13, 15, 18, 0.78);
+    pointer-events: none;
+  }
+
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+    padding-block: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line); background: var(--bg);
+  }
+  .bar label { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .bar input[type="range"] { width: 130px; accent-color: var(--accent); min-height: 32px; }
+  .bar .check { gap: 8px; }
+  .bar input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
+  .spacer { flex: 1; }
+  #keytoast { position: absolute; top: 12px; right: 12px; padding: 8px 14px; border-radius: 8px; background: rgba(13,15,18,0.85); color: var(--accent); font-size: 1rem; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #keytoast.show { opacity: 1; }
+  .pick { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 0.9rem; }
+  .pick select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 48px; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;600&display=swap">
+
+</head>
+<body>
+<div class="app">
+  <section id="editor">
+    <h1>Script</h1>
+    <p>Edit the text, then start. Blank lines separate paragraphs.</p>
+    <textarea id="script" spellcheck="false" aria-label="Script text"></textarea>
+    <div class="row">
+      <button id="start" class="primary" type="button">Start prompter</button>
+      <label for="episode" class="pick">Load <select id="episode"><option value="1">Episode 1</option><option value="2">Episode 2</option><option value="3">Episode 3</option></select></label>
+      <button id="reset-script" type="button">Load script</button>
+    </div>
+  </section>
+
+  <section id="prompter">
+    <div id="stage">
+      <div id="text"></div>
+      <div id="marker"></div>
+      <div id="count" aria-live="polite"></div>
+      <div id="keytoast"></div>
+    </div>
+    <div class="bar">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="top" type="button">Top</button>
+      <button id="voice" type="button" aria-pressed="false">Voice</button>
+      <span id="voicestat" aria-live="polite"></span>
+      <label for="speed">Speed <input id="speed" type="range" min="1" max="100" value="30"></label>
+      <label for="size">Size <input id="size" type="range" min="28" max="110" value="56"></label>
+      <label for="line">Line <input id="line" type="range" min="10" max="70" value="35"></label>
+      <label class="check" for="mirror"><input id="mirror" type="checkbox"> Mirror</label>
+      <span class="spacer"></span>
+      <button id="edit" type="button">Edit</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var DEFAULT = [
+    "Hi, I'm Ben with Marina Continental Light and Shade. This is the first episode of a planned series of videos called Lutron, Explained. This episode is about the series itself: who I am, why I'm making it, and what's coming.",
+    "First, who I am. I've been a Lutron custom integrator for fourteen years. We design, install, program, and service lighting and shade control projects; everything from a single set of shades to whole-house systems. We’re also licensed electricians, so we see both sides of a project: the wiring in the wall and the control system on top of it.",
+    "We’re an independent company that sells, installs, and programs Lutron products. It is important that I disclose that I am not a representative for Lutron Electronics and that my comments, observations, or opinions do not reflect those of Lutron Electronics.",
+    "Where we're broadcasting from. This is our showroom in Richmond, California. Behind me, you can see part of the showroom. It’s a Lutron Ketra Experience Showroom, and we show only Lutron products. It's open by appointment, and its purpose is to provide folks like you an opportunity to see and touch operating examples of these products.",
+    "Next, why this series. I went looking for clear, current videos that explain Lutron's residential systems, and I found almost nothing that touches on how these systems work, who designs and builds them, and what they cost.  Yet people are trying to figure out how to upgrade existing systems or move forward with installing a new system. These people are often making expensive decisions without a clear picture.",
+    "Here's what this industry looks like today.  Lighting control systems are rapidly growing in popularity because homeowners want comfort, convenience, safety, and pride of ownership.  Today’s systems, though, are high technology products and successfully implementing them typically requires using professionals with advanced skills, training, and experience.  In many cases, the other professionals already on a residential construction project – the architect, the contractor, the designer, and others – haven’t had the chance to work with these control systems before.  For these reasons customers have difficulty getting the specific information they need to make purchase decisions.",
+    "Lastly, what this series covers. We’ll try for one new episode a month. First, the basics: what a lighting control system is, and where Lutron fits. Then Lutron’s systems, shades, and intelligent lighting, so you know what’s available. And then the practical side: upgrading an older system, working with your project team, and keeping to a budget. The full list is in the description.",
+    "This series is for, number 1, homeowners who are buying a new system, expanding the one they have, or living with an older system and wondering what their options are, and, number 2, for the architects, electricians, designers, and builders who get asked to include Lutron in a project.",
+    "I’ll be straight about cost, I’ll use real projects, and I’ll tell you when something isn’t worth it.",
+    "Next time, in episode 2: we’ll explain what a lighting control system actually is.",
+    "If you have a question about your own project, put it in the comments. I read them. And if you'd like to visit the showroom in person, the number is in the description.",
+    "I’ll see you next time."
+  ].join("\n\n");
+
+  var EP2 = [
+    "Hi again, I'm Ben with Marina Continental Light and Shade. Last time, in Episode 1, I explained why I'm making this series. This time, the basics: what exactly is a lighting control system?",
+    "Simply put, the purpose of a lighting control system (or LCS) is to control the light in a home:  the artificial light from the fixtures, and the natural light coming through the windows.",
+    "A normal light switch just cuts power to a light. An LCS works differently. A keypad on the wall doesn't switch power, it sends a message to a controller, or brain. For example, one button press can set a dinner scene: the lights dimmed to a warm level and the shades lowered, all at once.",
+    "There are three parts to every LCS. The first part, the controls: keypads, a phone app, and sensors. The second part, the brain: a processor that holds the programming and reads those messages. The third part, the loads: the lights and motorized shades, along with the dimmers and motor controllers that drive them.",
+    "Wiring ties all three of these parts together, and it's the one thing you can't easily change once the walls are closed. I know, because as an electrician, I've opened a lot of walls to fix this wiring.",
+    "Another thing: what a lighting control system is not. It isn’t a full home automation system, which can add distributed audio, TV control, security, voice control, and pool or spa control. A lighting control system usually handles just the lights and shades. Many homes use just an LCS on its own, and that works perfectly well. Others add a home automation system on top that tells the lighting control system what to do.",
+    "Keep in mind that each manufacturer makes its own lighting control system. You usually can’t mix dimmers and keypads from different manufacturers in one system, so you’re committing to one path.",
+    "So - one system, three parts, controlling all the light in your home, natural and artificial. And with one button, you can change the whole room.",
+    "As always, I’m not a Lutron representative; these are my own views.",
+    "Next time, in Episode 3, I'll explain what Lutron actually is.",
+    "If you have a question about your own project, put it in the comments. I read them. And if you'd like to visit the showroom in person, the number is in the description.",
+    "I’ll see you next time."
+  ].join("\n\n");
+
+  var EP3 = [
+    "Hi, I'm Ben from Marina Continental Light and Shade. Last time in Episode 2, I explained what a lighting control system is. This time I want to explain what Lutron is, because that name comes up in almost every conversation I have with homeowners.",
+    "As always, I’m not a Lutron representative; these are my own views.",
+    "Lutron Electronics is a privately-held manufacturing company. It was founded in 1961 by Joel Spira, who invented the first solid-state dimmer for lighting. Lutron is based in Coopersburg, Pennsylvania, and it focuses on lighting controls, motorized shades, and architectural lighting fixtures.",
+    "Lutron is a global organization and sells to over 100 countries in North America, Europe, Asia, the Middle East, and Latin America.",
+    "In my fourteen years working with Lutron, I’ve found its products, engineering, and support consistently strong.",
+    "Lutron sells more than one residential control system, and the names of these systems confuse a lot of people. The entry level system, Caséta, is designed for homeowners who have a smaller space and want to do it themselves. The next step up is RadioRA 2 Select.  This is intended for straightforward wireless retrofits and often serves as bridge between Caséta and RadioRA3.  RadioRA3 is what Lutron calls a pro-grade system.  It is intended for mid-to-large luxury homes.  And HomeWorks, specifically HomeWorks QSx, is what Lutron calls its most advanced and customizable residential system. A trained professional installs and programs the higher-end systems. I'll explain how to choose between them in a later episode.",
+    "Here's what these names mean in practice. These aren’t a single switch you buy and screw to the wall. They’re systems: a processor, keypads, dimming and switching devices, and shade controls, all programmed for your house.",
+    "Which brings up the shades. Lutron makes motorized shades that tie into the same system. So one button can set the lights and lower the shades together.",
+    "Why does all of this matter? Because when someone says, I want Lutron, that can mean a do-it-yourself kit or a whole-house system. Same company name. Very different projects.",
+    "Next time, in Episode 4, I'll explain why selecting the correct control system is typically the first decision to be made in a lighting control project.  That is, the control system is usually decided on before selecting the light fixtures or the automated window coverings.",
+    "If you have a question about your own project, put it in the comments. I read them.  If you’d like to visit the showroom in person, the number is in the description.",
+    "I’ll see you next time."
+  ].join("\n\n");
+  var SCRIPTS = { "1": DEFAULT, "2": EP2, "3": EP3 };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var script = $("script"), stage = $("stage"), textEl = $("text"), marker = $("marker"), count = $("count");
+  var playBtn = $("play"), speed = $("speed"), size = $("size"), mirror = $("mirror"), line = $("line");
+
+  var y = 0, playing = false, last = 0, raf = 0, counting = false, wake = null;
+  var words = [], vpos = -1, vTarget = null, down = null;
+  function norm(s) { return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['\u2019]/g, "").replace(/[^a-z0-9]/g, ""); }
+
+  function load(key, fallback) {
+    try { var v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; }
+  }
+  function save(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+
+  script.value = load("tp_script", DEFAULT);
+  speed.value = load("tp_speed", "30");
+  size.value = load("tp_size", "56");
+  line.value = load("tp_line", "35");
+  mirror.checked = load("tp_mirror", "0") === "1";
+
+  function render() {
+    textEl.textContent = "";
+    words = []; vpos = -1; vTarget = null;
+    script.value.split(/\n\s*\n/).forEach(function (chunk) {
+      var t = chunk.trim();
+      if (!t) return;
+      var p = document.createElement("p");
+      t.split(/\s+/).forEach(function (tok, k) {
+        if (k) p.appendChild(document.createTextNode(" "));
+        var w = document.createElement("span");
+        w.className = "w";
+        w.dataset.i = words.length;
+        w.textContent = tok;
+        words.push({ el: w, n: norm(tok) });
+        p.appendChild(w);
+      });
+      textEl.appendChild(p);
+    });
+  }
+
+  function layout() {
+    var h = stage.clientHeight;
+    var pad = Math.round(h * Number(line.value) / 100);
+    marker.style.top = pad + "px";
+    textEl.style.paddingTop = pad + "px";
+    textEl.style.paddingBottom = Math.round(h * 0.6) + "px";
+    textEl.style.fontSize = size.value + "px";
+    stage.classList.toggle("mirror", mirror.checked);
+    apply();
+  }
+
+  function maxY() { return Math.max(0, textEl.offsetHeight - stage.clientHeight * 0.75); }
+  function apply() {
+    if (y < 0) y = 0;
+    if (y > maxY()) y = maxY();
+    textEl.style.transform = "translate3d(0," + (-y) + "px,0)";
+  }
+
+  function pxPerSec() { return 8 + Number(speed.value) * 2.2; }
+
+  function frame(now) {
+    if (!playing) return;
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    y += pxPerSec() * dt;
+    if (y >= maxY()) { y = maxY(); apply(); setPlaying(false); return; }
+    apply();
+    raf = requestAnimationFrame(frame);
+  }
+
+  function setPlaying(on) {
+    playing = on;
+    playBtn.textContent = on ? "Pause" : "Play";
+    cancelAnimationFrame(raf);
+    if (on) {
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+      keepAwake();
+    }
+  }
+
+  function keepAwake() {
+    try {
+      if (navigator.wakeLock && !wake) {
+        navigator.wakeLock.request("screen").then(function (l) {
+          wake = l;
+          l.addEventListener("release", function () { wake = null; });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function startWithCountdown() {
+    if (counting) return;
+    counting = true;
+    var n = 3;
+    count.style.display = "flex";
+    count.textContent = n;
+    var t = setInterval(function () {
+      n -= 1;
+      if (n <= 0) {
+        clearInterval(t);
+        count.style.display = "none";
+        counting = false;
+        setPlaying(true);
+      } else {
+        count.textContent = n;
+      }
+    }, 1000);
+  }
+
+  function toggle() {
+    if (counting) return;
+    if (playing) setPlaying(false);
+    else if (y === 0) startWithCountdown();
+    else setPlaying(true);
+  }
+
+  $("start").addEventListener("click", function () {
+    save("tp_script", script.value);
+    render();
+    document.body.classList.add("running");
+    y = 0;
+    layout();
+    keepAwake();
+  });
+  $("edit").addEventListener("click", function () {
+    stopVoice();
+    setPlaying(false);
+    counting = false;
+    count.style.display = "none";
+    document.body.classList.remove("running");
+  });
+  $("reset-script").addEventListener("click", function () {
+    var pick = SCRIPTS[$("episode").value] || DEFAULT;
+    script.value = pick;
+    save("tp_script", pick);
+  });
+  script.addEventListener("input", function () { save("tp_script", script.value); });
+
+  playBtn.addEventListener("click", function () { if (voiceOn) stopVoice(); toggle(); });
+
+  var toastEl = $("keytoast"), toastT = 0;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove("show"); }, 1500);
+  }
+  function nudge(d) {
+    speed.value = Math.max(1, Math.min(100, Number(speed.value) + d));
+    save("tp_speed", speed.value);
+    return "Speed " + speed.value;
+  }
+  document.addEventListener("keydown", function (e) {
+    if (!document.body.classList.contains("running")) return;
+    var k = e.key, msg = null;
+    if (k === " " || k === "Enter" || k === "k" || k === "." || k === "b" || k === "MediaPlayPause") { toggle(); msg = playing ? "Play" : "Pause"; }
+    else if (k === "PageDown" || k === "ArrowRight" || k === "ArrowUp" || k === "+" || k === "=") msg = nudge(5);
+    else if (k === "PageUp" || k === "ArrowLeft" || k === "ArrowDown" || k === "-") msg = nudge(-5);
+    toast(msg ? "[" + k + "] " + msg : "Key: [" + k + "]");
+    if (msg) e.preventDefault();
+  });
+  $("top").addEventListener("click", function () { setPlaying(false); y = 0; apply(); setVoicePos(-1, false); vTarget = 0; });
+
+  speed.addEventListener("input", function () { save("tp_speed", speed.value); });
+  size.addEventListener("input", function () {
+    var ratio = maxY() > 0 ? y / textEl.offsetHeight : 0;
+    save("tp_size", size.value);
+    layout();
+    y = ratio * textEl.offsetHeight;
+    apply();
+  });
+  mirror.addEventListener("change", function () { save("tp_mirror", mirror.checked ? "1" : "0"); layout(); });
+  line.addEventListener("input", function () { save("tp_line", line.value); layout(); });
+
+  // Tap the text to pause or resume. Drag to move through the script.
+  stage.addEventListener("pointerdown", function (e) {
+    down = { y: e.clientY, start: y, moved: false, wasPlaying: playing };
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  stage.addEventListener("pointermove", function (e) {
+    if (!down) return;
+    var d = e.clientY - down.y;
+    if (Math.abs(d) > 8) {
+      if (!down.moved && playing) setPlaying(false);
+      down.moved = true;
+    }
+    if (down.moved) {
+      y = down.start - d * (mirror.checked ? 1 : 1);
+      apply();
+    }
+  });
+  function release(e) {
+    if (!down) return;
+    var d = down;
+    down = null;
+    if (!d.moved) {
+      if (voiceOn) {
+        var el = e && document.elementFromPoint(e.clientX, e.clientY);
+        if (el && el.dataset && el.dataset.i !== undefined) { lastAdvance = Date.now(); setVoicePos(Number(el.dataset.i) - 1, true); }
+      } else toggle();
+    } else if (voiceOn) syncFromScroll();
+    else if (d.wasPlaying) setPlaying(true);
+  }
+  stage.addEventListener("pointerup", release);
+  stage.addEventListener("pointercancel", function () { down = null; });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { setPlaying(false); }
+  });
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", function () { setTimeout(layout, 200); });
+
+  // ---- Voice follow: scroll as you speak (Web Speech API) ----
+  function lev1(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    var i = 0, j = 0, d = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++d > 1) return false;
+      if (a.length > b.length) i++; else if (a.length < b.length) j++; else { i++; j++; }
+    }
+    return d + (a.length - i) + (b.length - j) <= 1;
+  }
+  function same(a, b) { return a === b || (a.length >= 5 && b.length >= 5 && lev1(a, b)); }
+
+  // Find the script word the speaker has just reached. W: normalized script words, T: spoken tokens.
+  function findPos(T, W, pos, win) {
+    var tl = T.length, best = -1, bestScore = 0;
+    if (!tl) return pos;
+    var hi = Math.min(W.length - 1, pos + win);
+    for (var j = pos + 1; j <= hi; j++) {
+      if (!W[j] || !same(W[j], T[tl - 1])) continue;
+      var score = 1, k = 1, wi = j - 1;
+      while (k < Math.min(tl, 4)) {
+        while (wi >= 0 && W[wi] === "") wi--;
+        if (wi < 0) break;
+        if (same(W[wi], T[tl - 1 - k])) score++;
+        wi--; k++;
+      }
+      if (tl >= 2 ? score < 2 : (T[tl - 1].length < 4 || j > pos + 8)) continue;
+      if (score > bestScore) { best = j; bestScore = score; }
+    }
+    return best >= 0 ? best : pos;
+  }
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var voiceBtn = $("voice"), statEl = $("voicestat");
+  var voiceOn = false, rec = null, vraf = 0, vlast = 0, lastAdvance = 0, restarts = [];
+
+  function status(msg, err) { statEl.textContent = msg || ""; statEl.classList.toggle("err", !!err); }
+
+  function markSaid() {
+    for (var i = 0; i < words.length; i++) words[i].el.classList.toggle("said", i <= vpos);
+  }
+  function targetFor(idx) {
+    var w = words[Math.min(words.length - 1, Math.max(0, idx))];
+    if (!w) return null;
+    var wy = w.el.getBoundingClientRect().top - textEl.getBoundingClientRect().top;
+    return Math.max(0, wy - (parseFloat(textEl.style.paddingTop) || 0));
+  }
+  function setVoicePos(pos, snap) {
+    vpos = pos; markSaid();
+    vTarget = targetFor(vpos + 1);
+    if (snap && vTarget !== null) { y = vTarget; apply(); }
+  }
+  function syncFromScroll() {
+    var line = stage.getBoundingClientRect().top + (parseFloat(textEl.style.paddingTop) || 0);
+    var i = 0;
+    while (i < words.length && words[i].el.getBoundingClientRect().top < line - 2) i++;
+    vpos = i - 1; markSaid(); vTarget = y;
+  }
+
+  function onSpeech(ev) {
+    var text = "";
+    for (var i = 0; i < ev.results.length; i++) text += " " + ev.results[i][0].transcript;
+    var T = text.split(/\s+/).map(norm).filter(Boolean).slice(-8);
+    if (!T.length) return;
+    status("Hearing: " + text.trim().split(/\s+/).slice(-6).join(" "));
+    var now = Date.now();
+    var win = now - lastAdvance > 6000 ? 90 : 30;
+    var next = findPos(T, words.map(function (w) { return w.n; }), vpos, win);
+    if (next > vpos) { lastAdvance = now; setVoicePos(next, false); }
+  }
+
+  function vframe(now) {
+    if (!voiceOn) return;
+    var dt = Math.min(0.1, (now - vlast) / 1000);
+    vlast = now;
+    if (vTarget !== null && !down) {
+      var d = vTarget - y;
+      if (d > 0.5) { y += d * Math.min(1, dt * 3); apply(); }
+    }
+    vraf = requestAnimationFrame(vframe);
+  }
+
+  function startVoice() {
+    if (!SR) { status("Voice scrolling isn't supported in this browser. Try Safari.", true); return; }
+    setPlaying(false);
+    try {
+      rec = new SR();
+      rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
+      rec.onresult = onSpeech;
+      rec.onerror = function (e) {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          stopVoice();
+          status("Microphone blocked here. Allow it in Settings, or open the page directly in Safari.", true);
+        }
+      };
+      rec.onend = function () {
+        if (!voiceOn) return;
+        var t = Date.now();
+        restarts = restarts.filter(function (x) { return t - x < 10000; });
+        restarts.push(t);
+        if (restarts.length > 6) { stopVoice(); status("Voice stopped: the speech service keeps dropping. Tap Voice to retry.", true); return; }
+        setTimeout(function () { if (voiceOn) { try { rec.start(); } catch (e) {} } }, 250);
+      };
+      voiceOn = true; restarts = []; lastAdvance = Date.now();
+      rec.start();
+    } catch (e) { voiceOn = false; status("Couldn't start voice: " + e.message, true); return; }
+    document.body.classList.add("voice");
+    voiceBtn.classList.add("on"); voiceBtn.setAttribute("aria-pressed", "true");
+    if (vpos < 0) syncFromScroll();
+    status("Listening. Tap any word to jump there.");
+    keepAwake();
+    vlast = performance.now(); cancelAnimationFrame(vraf); vraf = requestAnimationFrame(vframe);
+  }
+  function stopVoice() {
+    voiceOn = false;
+    cancelAnimationFrame(vraf);
+    try { if (rec) { rec.onend = null; rec.stop(); } } catch (e) {}
+    document.body.classList.remove("voice");
+    voiceBtn.classList.remove("on"); voiceBtn.setAttribute("aria-pressed", "false");
+    status("");
+  }
+  voiceBtn.addEventListener("click", function () { if (voiceOn) stopVoice(); else startVoice(); });
+
+  render();
+})();
+</script>
+
+
+</body>
+</html>
