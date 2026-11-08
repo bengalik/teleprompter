@@ -496,10 +496,18 @@
       rec = new SR();
       rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
       rec.onresult = onSpeech;
+      rec.onstart = function () { status("Microphone opened. Start talking."); };
       rec.onerror = function (e) {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        if (e.error === "not-allowed") {
           stopVoice();
-          status("Microphone blocked here. Allow it in Settings, or open the page directly in Safari.", true);
+          status("Error not-allowed: the browser refused the microphone. In Safari tap the aA icon, Website Settings, Microphone, Allow. Then reload.", true);
+        } else if (e.error === "service-not-allowed") {
+          stopVoice();
+          status("Error service-not-allowed: speech recognition is off. Settings, General, Keyboard, turn on Enable Dictation. Also check Siri settings.", true);
+        } else if (e.error === "no-speech" || e.error === "aborted") {
+          /* normal: restarts itself */
+        } else {
+          status("Speech error: " + e.error, true);
         }
       };
       rec.onend = function () {
