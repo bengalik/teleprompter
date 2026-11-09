@@ -101,6 +101,10 @@
   }
   .bar label { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
   .bar input[type="range"] { width: 130px; accent-color: var(--accent); min-height: 32px; }
+  /* Safari: body is user-select:none, which can make form controls unresponsive. Re-enable on controls and keep the bar above the text layer. */
+  .bar { position: relative; z-index: 10; }
+  .bar input, .bar select, .bar label, .bar button { -webkit-user-select: auto; user-select: auto; pointer-events: auto; touch-action: manipulation; }
+  .bar input[type="range"] { -webkit-appearance: auto; appearance: auto; cursor: pointer; }
   .bar .check { gap: 8px; }
   .bar input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
   .spacer { flex: 1; }
