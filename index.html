@@ -364,9 +364,10 @@
     layout();
     y = ratio * textEl.offsetHeight;
     apply();
+    refreshVoiceTarget();
   });
   mirror.addEventListener("change", function () { save("tp_mirror", mirror.checked ? "1" : "0"); layout(); });
-  line.addEventListener("input", function () { save("tp_line", line.value); layout(); });
+  line.addEventListener("input", function () { save("tp_line", line.value); layout(); refreshVoiceTarget(); });
 
   // Tap the text to pause or resume. Drag to move through the script.
   stage.addEventListener("pointerdown", function (e) {
@@ -403,7 +404,7 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) { setPlaying(false); }
   });
-  window.addEventListener("resize", layout);
+  window.addEventListener("resize", function () { layout(); refreshVoiceTarget(); });
   window.addEventListener("orientationchange", function () { setTimeout(layout, 200); });
 
   // ---- Voice follow: scroll as you speak (Web Speech API) ----
@@ -458,6 +459,12 @@
     vpos = pos; markSaid();
     vTarget = targetFor(vpos + 1);
     if (snap && vTarget !== null) { y = vTarget; apply(); }
+  }
+  // After size, line or window changes, keep the current word on the reading line.
+  function refreshVoiceTarget() {
+    if (!voiceOn || !words.length) return;
+    var t = targetFor(vpos + 1);
+    if (t !== null) { vTarget = t; y = t; apply(); }
   }
   function syncFromScroll() {
     var line = stage.getBoundingClientRect().top + (parseFloat(textEl.style.paddingTop) || 0);
