@@ -476,6 +476,8 @@
         wi--; k++;
       }
       if (tl >= 2 ? score < 2 : (T[tl - 1].length < 4 || j > pos + 8)) continue;
+      // A repeated phrase further ahead must not win over the near one: far jumps need 3 matching words.
+      if (j > pos + 10 && win <= 30 && score < 3) continue;
       if (score > bestScore) { best = j; bestScore = score; }
     }
     return best >= 0 ? best : pos;
