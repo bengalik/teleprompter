@@ -48,6 +48,10 @@
     -webkit-user-select: text; user-select: text;
   }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .pair { padding-top: 6px; border-top: 1px solid var(--line); color: var(--dim); font-size: 0.9rem; }
+  #paircode { font: inherit; width: 8ch; text-transform: lowercase; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 48px; -webkit-user-select: text; user-select: text; }
+  #pairstat { flex-basis: 100%; }
+  #pairstat.err { color: #ff8d7a; }
 
   button {
     font: inherit; font-weight: 600; color: var(--fg);
@@ -134,6 +138,13 @@
       <label for="episode" class="pick">Load <select id="episode"><option value="1">Episode 1</option><option value="2">Episode 2</option><option value="3">Episode 3</option></select></label>
       <button id="reset-script" type="button">Load script</button>
     </div>
+    <div class="row pair">
+      <strong>Two devices</strong>
+      <button id="be-display" type="button">Show script here</button>
+      <input id="paircode" placeholder="code" maxlength="8" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="Pairing code">
+      <button id="be-listener" type="button">Listen here</button>
+      <span id="pairstat" aria-live="polite"></span>
+    </div>
   </section>
 
   <section id="prompter">
@@ -158,6 +169,7 @@
   </section>
 </div>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (function () {
   var DEFAULT = [
@@ -330,6 +342,7 @@
     y = 0;
     layout();
     keepAwake();
+    sendScript();
   });
   $("edit").addEventListener("click", function () {
     stopVoice();
@@ -367,7 +380,7 @@
     toast(msg ? "[" + k + "] " + msg : "Key: [" + k + "]");
     if (msg) e.preventDefault();
   });
-  $("top").addEventListener("click", function () { setPlaying(false); y = 0; apply(); setVoicePos(-1, false); vTarget = 0; });
+  $("top").addEventListener("click", function () { setPlaying(false); y = 0; apply(); setVoicePos(-1, false); vTarget = 0; if (conn && conn.open) conn.send({ t: "top" }); });
 
   speed.addEventListener("input", function () { save("tp_speed", speed.value); });
   size.addEventListener("input", function () {
@@ -405,9 +418,9 @@
     if (!d.moved) {
       if (voiceOn) {
         var el = e && document.elementFromPoint(e.clientX, e.clientY);
-        if (el && el.dataset && el.dataset.i !== undefined) { lastAdvance = Date.now(); setVoicePos(Number(el.dataset.i) - 1, true); }
-      } else toggle();
-    } else if (voiceOn) syncFromScroll();
+        if (el && el.dataset && el.dataset.i !== undefined) { lastAdvance = Date.now(); setVoicePos(Number(el.dataset.i) - 1, true); sendPos(true); }
+      } else if (!remoteOn) toggle();
+    } else if (voiceOn) { syncFromScroll(); sendPos(true); }
     else if (d.wasPlaying) setPlaying(true);
   }
   stage.addEventListener("pointerup", release);
@@ -494,11 +507,11 @@
     var now = Date.now();
     var win = now - lastAdvance > 6000 ? 90 : 30;
     var next = findPos(T, words.map(function (w) { return w.n; }), vpos, win);
-    if (next > vpos) { lastAdvance = now; setVoicePos(next, false); }
+    if (next > vpos) { lastAdvance = now; setVoicePos(next, false); sendPos(false); }
   }
 
   function vframe(now) {
-    if (!voiceOn) return;
+    if (!voiceOn && !remoteOn) return;
     var dt = Math.min(0.1, (now - vlast) / 1000);
     vlast = now;
     if (vTarget !== null && !down) {
@@ -556,6 +569,74 @@
     status("");
   }
   voiceBtn.addEventListener("click", function () { if (voiceOn) stopVoice(); else startVoice(); });
+
+
+  // ---- Two devices: one listens (phone), one displays and records (iPad) ----
+  var peer = null, conn = null, remoteOn = false;
+  var pairStat = $("pairstat");
+  function pairStatus(m, err) { pairStat.textContent = m || ""; pairStat.classList.toggle("err", !!err); }
+  function peerReady() {
+    if (typeof Peer === "undefined") { pairStatus("Couldn't load the connection library. Check the internet connection and reload.", true); return false; }
+    return true;
+  }
+  function makeCode() {
+    var a = "abcdefghjkmnpqrstuvwxyz23456789", c = "";
+    for (var i = 0; i < 5; i++) c += a[Math.floor(Math.random() * a.length)];
+    return c;
+  }
+  function sendScript() { if (conn && conn.open) conn.send({ t: "script", text: script.value }); }
+  function sendPos(snap) { if (conn && conn.open) conn.send({ t: "pos", i: vpos, snap: !!snap }); }
+
+  // Display side
+  function onRemote(m) {
+    if (!m) return;
+    if (m.t === "script") {
+      script.value = m.text; save("tp_script", m.text);
+      render();
+      document.body.classList.add("running", "voice");
+      y = 0; layout(); keepAwake();
+      remoteOn = true;
+      status("Following the other device.");
+      vlast = performance.now(); cancelAnimationFrame(vraf); vraf = requestAnimationFrame(vframe);
+    } else if (m.t === "pos") {
+      setVoicePos(m.i, !!m.snap);
+    } else if (m.t === "top") {
+      y = 0; apply(); setVoicePos(-1, false); vTarget = 0;
+    }
+  }
+  $("be-display").addEventListener("click", function () {
+    if (!peerReady()) return;
+    var code = makeCode();
+    pairStatus("Starting…");
+    try { if (peer) peer.destroy(); } catch (e) {}
+    peer = new Peer("mcls-tp-" + code);
+    peer.on("open", function () { pairStatus("Code: " + code.toUpperCase() + ". On the listening device, type this code and tap Listen here."); });
+    peer.on("error", function (e) { pairStatus("Connection error: " + e.type, true); });
+    peer.on("connection", function (c) {
+      conn = c;
+      c.on("data", onRemote);
+      c.on("close", function () { remoteOn = false; pairStatus("The listening device disconnected.", true); });
+      pairStatus("Connected. Tap Start prompter on the listening device.");
+    });
+  });
+
+  // Listener side
+  $("be-listener").addEventListener("click", function () {
+    if (!peerReady()) return;
+    var code = ($("paircode").value || "").trim().toLowerCase();
+    if (!code) { pairStatus("Type the code shown on the display device first.", true); return; }
+    pairStatus("Connecting…");
+    try { if (peer) peer.destroy(); } catch (e) {}
+    peer = new Peer();
+    peer.on("error", function (e) {
+      pairStatus("Connection error: " + e.type + (e.type === "peer-unavailable" ? " (wrong code, or the display isn't ready)" : ""), true);
+    });
+    peer.on("open", function () {
+      conn = peer.connect("mcls-tp-" + code, { reliable: true });
+      conn.on("open", function () { pairStatus("Connected to the display. Tap Start prompter, then Voice."); sendScript(); });
+      conn.on("close", function () { pairStatus("The display disconnected.", true); conn = null; });
+    });
+  });
 
   function paint(el) {
     var min = Number(el.min), max = Number(el.max);
