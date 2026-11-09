@@ -150,13 +150,13 @@
       <div class="mode">
         <div class="who">1. On the iPad <span>(records video, DJI mic, shows the script)</span></div>
         <button id="be-display" class="primary" type="button">Show script here</button>
-        <div class="why">Gives you a code. Never turn Voice on at the iPad.</div>
+        <div class="why">Tap it, then leave the iPad alone. Never turn Voice on at the iPad.</div>
       </div>
       <div class="mode">
         <div class="who">2. On the iPhone <span>(listens to you, controls the scrolling)</span></div>
-        <input id="paircode" placeholder="code" maxlength="8" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="Pairing code">
+        <input id="paircode" placeholder="code" value="mcls" maxlength="8" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="Pairing code">
         <button id="be-listener" class="primary" type="button">Listen here</button>
-        <div class="why">Type the iPad's code, tap Listen here, then Start prompter and Voice.</div>
+        <div class="why">First pick the episode and tap Load script. Then one tap on Listen here starts everything. Leave the code as it is unless the iPad shows a different one.</div>
       </div>
       <p class="one">Using just one device? Ignore this box and tap Start prompter above.</p>
       <span id="pairstat" aria-live="polite"></span>
@@ -622,25 +622,33 @@
   }
   $("be-display").addEventListener("click", function () {
     if (!peerReady()) return;
-    var code = makeCode();
+    startDisplay("mcls", true);
+  });
+  function startDisplay(code, first) {
     pairStatus("Starting…");
     try { if (peer) peer.destroy(); } catch (e) {}
     peer = new Peer("mcls-tp-" + code);
-    peer.on("open", function () { pairStatus("Code: " + code.toUpperCase() + ". On the listening device, type this code and tap Listen here."); });
-    peer.on("error", function (e) { pairStatus("Connection error: " + e.type, true); });
+    peer.on("open", function () { pairStatus(code === "mcls" ? "Ready. On the iPhone, tap Listen here." : "Ready. On the iPhone, type the code " + code.toUpperCase() + " and tap Listen here."); });
+    peer.on("error", function (e) {
+      if (e.type === "unavailable-id" && first) { startDisplay(makeCode(), false); return; }
+      pairStatus("Connection error: " + e.type, true);
+    });
     peer.on("connection", function (c) {
       conn = c;
       c.on("data", onRemote);
       c.on("close", function () { remoteOn = false; pairStatus("The listening device disconnected.", true); });
-      pairStatus("Connected. Tap Start prompter on the listening device.");
+      pairStatus("Connected. The iPhone is controlling this screen.");
     });
-  });
+  }
 
   // Listener side
   $("be-listener").addEventListener("click", function () {
     if (!peerReady()) return;
     var code = ($("paircode").value || "").trim().toLowerCase();
     if (!code) { pairStatus("Type the code shown on the display device first.", true); return; }
+    try { localStorage.setItem("tp_code", code); } catch (e) {}
+    if (!document.body.classList.contains("running")) $("start").click();
+    if (!voiceOn) startVoice();
     pairStatus("Connecting…");
     try { if (peer) peer.destroy(); } catch (e) {}
     peer = new Peer();
@@ -649,7 +657,7 @@
     });
     peer.on("open", function () {
       conn = peer.connect("mcls-tp-" + code, { reliable: true });
-      conn.on("open", function () { pairStatus("Connected to the display. Tap Start prompter, then Voice."); sendScript(); });
+      conn.on("open", function () { pairStatus("Connected to the display."); sendScript(); sendPos(true); });
       conn.on("close", function () { pairStatus("The display disconnected.", true); conn = null; });
     });
   });
