@@ -48,6 +48,13 @@
     -webkit-user-select: text; user-select: text;
   }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .modes { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .modes h2 { margin: 0 0 10px; font-size: 1.05rem; }
+  .mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .mode .who { flex-basis: 100%; font-weight: 700; }
+  .mode .who span { font-weight: 400; color: var(--dim); }
+  .mode .why { flex-basis: 100%; color: var(--dim); font-size: 0.9rem; }
+  .modes .one { margin: 8px 0 0; color: var(--dim); font-size: 0.9rem; }
   .pair { padding-top: 6px; border-top: 1px solid var(--line); color: var(--dim); font-size: 0.9rem; }
   #paircode { font: inherit; width: 8ch; text-transform: lowercase; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 48px; -webkit-user-select: text; user-select: text; }
   #pairstat { flex-basis: 100%; }
@@ -138,11 +145,20 @@
       <label for="episode" class="pick">Load <select id="episode"><option value="1">Episode 1</option><option value="2">Episode 2</option><option value="3">Episode 3</option></select></label>
       <button id="reset-script" type="button">Load script</button>
     </div>
-    <div class="row pair">
-      <strong>Two devices</strong>
-      <button id="be-display" type="button">Show script here</button>
-      <input id="paircode" placeholder="code" maxlength="8" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="Pairing code">
-      <button id="be-listener" type="button">Listen here</button>
+    <div class="modes">
+      <h2>Recording with two devices?</h2>
+      <div class="mode">
+        <div class="who">1. On the iPad <span>(records video, DJI mic, shows the script)</span></div>
+        <button id="be-display" class="primary" type="button">Show script here</button>
+        <div class="why">Gives you a code. Never turn Voice on at the iPad.</div>
+      </div>
+      <div class="mode">
+        <div class="who">2. On the iPhone <span>(listens to you, controls the scrolling)</span></div>
+        <input id="paircode" placeholder="code" maxlength="8" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="Pairing code">
+        <button id="be-listener" class="primary" type="button">Listen here</button>
+        <div class="why">Type the iPad's code, tap Listen here, then Start prompter and Voice.</div>
+      </div>
+      <p class="one">Using just one device? Ignore this box and tap Start prompter above.</p>
       <span id="pairstat" aria-live="polite"></span>
     </div>
   </section>
@@ -203,16 +219,16 @@
   ].join("\n\n");
 
   var EP3 = [
-    "Hi, I'm Ben from Marina Continental Light and Shade. Last time in Episode 2, I explained what a lighting control system is. This time I want to explain what Lutron is, because that name comes up in almost every conversation I have with homeowners.",
+    "Hi, I’m Ben from Marina Continental Light and Shade. Last time in Episode 2, I explained what a lighting control system is. This time I want to explain what Lutron is, because that name comes up in almost every conversation I have with homeowners. In this episode we’ll talk about Lutron the company, and then we’ll go into Lutron’s products in the episodes that follow.",
     "As always, I’m not a Lutron representative; these are my own views.",
-    "Lutron Electronics is a privately-held manufacturing company. It was founded in 1961 by Joel Spira, who invented the first solid-state dimmer for lighting. Lutron is based in Coopersburg, Pennsylvania, and it focuses on lighting controls, motorized shades, and architectural lighting fixtures.",
-    "Lutron is a global organization and sells to over 100 countries in North America, Europe, Asia, the Middle East, and Latin America.",
+    "Lutron Electronics is a privately-held manufacturing company. It was founded in 1961 by Joel Spira, who invented the first solid-state dimmer for lighting. Before his dimmer, dimming a light meant a resistance dimmer that turned the unused power into heat. He and his wife, Ruth, started the company in a small apartment in New York City, and later moved it to Coopersburg, Pennsylvania, where it’s still based. Lutron focuses on lighting controls, motorized shades, and architectural lighting fixtures, for both residential and commercial buildings.",
+    "Lutron is both a domestic and a global company. It sells across the United States, and in over 100 countries in North America, Europe, Asia, the Middle East, and Latin America.",
     "In my fourteen years working with Lutron, I’ve found its products, engineering, and support consistently strong.",
-    "Lutron sells more than one residential control system, and the names of these systems confuse a lot of people. The entry level system, Caséta, is designed for homeowners who have a smaller space and want to do it themselves. The next step up is RadioRA 2 Select.  This is intended for straightforward wireless retrofits and often serves as bridge between Caséta and RadioRA3.  RadioRA3 is what Lutron calls a pro-grade system.  It is intended for mid-to-large luxury homes.  And HomeWorks, specifically HomeWorks QSx, is what Lutron calls its most advanced and customizable residential system. A trained professional installs and programs the higher-end systems. I'll explain how to choose between them in a later episode.",
-    "Here's what these names mean in practice. These aren’t a single switch you buy and screw to the wall. They’re systems: a processor, keypads, dimming and switching devices, and shade controls, all programmed for your house.",
-    "Which brings up the shades. Lutron makes motorized shades that tie into the same system. So one button can set the lights and lower the shades together.",
-    "Why does all of this matter? Because when someone says, I want Lutron, that can mean a do-it-yourself kit or a whole-house system. Same company name. Very different projects.",
-    "Next time, in Episode 4, I'll explain why selecting the correct control system is typically the first decision to be made in a lighting control project.  That is, the control system is usually decided on before selecting the light fixtures or the automated window coverings.",
+    "Here’s something that confuses a lot of people: who actually stands behind a Lutron system. Lutron designs and manufactures the equipment, but Lutron doesn’t come to your house. A customer has at least three tiers of support. First, the dealer, an independent company, like mine, that sells, installs, and programs the system. Second, the Lutron sales representative, because Lutron works through a network of sales representatives who support the dealers. And third, Lutron itself.",
+    "Lutron protects its brand by insisting on training, experience, and business development from the companies that sell its more sophisticated products.",
+    "Lutron’s systems are designed to work together with other Lutron products. A Lutron keypad, dimmer, shade, and processor are built to interoperate. They’re generally not designed to mix and match with another manufacturer’s lighting control products. Some people call that a walled garden. The upside is that everything works together the way it’s meant to. The tradeoff is less freedom to combine brands. There are gates, though. Lutron makes its programming interface, its API, available to selected manufacturers of adjacent products. So if you have another control system, it can work with Lutron shades, for example, but only through that interface and only if Lutron has approved the manufacturer.",
+    "So when someone says, “I want Lutron,” that can mean very different things. Lutron’s products range from a few do-it-yourself items you can buy in a store to whole-house systems for large homes. Same company name. Very different projects.",
+    "Next time, in Episode 4, we’ll start looking at the many different Lutron solutions.",
     "If you have a question about your own project, put it in the comments. I read them.  If you’d like to visit the showroom in person, the number is in the description.",
     "I’ll see you next time."
   ].join("\n\n");
