@@ -104,7 +104,14 @@
   /* Safari: body is user-select:none, which can make form controls unresponsive. Re-enable on controls and keep the bar above the text layer. */
   .bar { position: relative; z-index: 10; }
   .bar input, .bar select, .bar label, .bar button { -webkit-user-select: auto; user-select: auto; pointer-events: auto; touch-action: manipulation; }
-  .bar input[type="range"] { -webkit-appearance: auto; appearance: auto; cursor: pointer; }
+  /* Drawn sliders so Safari and Chrome look the same, with a filled bar showing position */
+  .bar input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 32px; cursor: pointer; --p: 50%; }
+  .bar input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), #3a404a var(--p)); }
+  .bar input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #f3f1ea; border: 2px solid var(--accent); }
+  .bar input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: #3a404a; }
+  .bar input[type="range"]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+  .bar input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #f3f1ea; border: 2px solid var(--accent); }
+  body.voice label[for="speed"] { opacity: 0.4; }
   .bar .check { gap: 8px; }
   .bar input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
   .spacer { flex: 1; }
@@ -348,6 +355,7 @@
   function nudge(d) {
     speed.value = Math.max(1, Math.min(100, Number(speed.value) + d));
     save("tp_speed", speed.value);
+    paint(speed);
     return "Speed " + speed.value;
   }
   document.addEventListener("keydown", function (e) {
@@ -549,6 +557,11 @@
   }
   voiceBtn.addEventListener("click", function () { if (voiceOn) stopVoice(); else startVoice(); });
 
+  function paint(el) {
+    var min = Number(el.min), max = Number(el.max);
+    el.style.setProperty("--p", ((Number(el.value) - min) / (max - min) * 100) + "%");
+  }
+  [speed, size, line].forEach(function (el) { paint(el); el.addEventListener("input", function () { paint(el); }); });
   render();
 })();
 </script>
