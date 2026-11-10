@@ -221,14 +221,14 @@
   var EP3 = [
     "Hi, I’m Ben from Marina Continental Light and Shade. Last time in Episode 2, I explained what a lighting control system is. This time I want to explain what Lutron is, because that name comes up in almost every conversation I have with homeowners. In this episode we’ll talk about Lutron the company, and then we’ll go into Lutron’s products in the episodes that follow.",
     "As always, I’m not a Lutron representative; these are my own views.",
-    "Lutron Electronics is a privately-held manufacturing company. It was founded in 1961 by Joel Spira, who invented the first solid-state dimmer for lighting. Before his dimmer, dimming a light meant a resistance dimmer that turned the unused power into heat. He and his wife, Ruth, started the company in a small apartment in New York City, and later moved it to Coopersburg, Pennsylvania, where it’s still based. Lutron focuses on lighting controls, motorized shades, and architectural lighting fixtures, for both residential and commercial buildings.",
+    "Lutron Electronics is a privately-held manufacturing company. It was founded in 1961 by Joel Spira. Joel invented the first solid-state dimmer for lighting. Before his dimmer, dimming a light meant a resistance dimmer that turned the unused power into heat. He and his wife, Ruth, started the company in a small apartment in New York City, and later moved it to Coopersburg, Pennsylvania, where it’s still based today. Lutron focuses on lighting controls, motorized shades, and architectural lighting fixtures, for both residential and commercial buildings.",
     "Lutron is both a domestic and a global company. It sells across the United States, and in over 100 countries in North America, Europe, Asia, the Middle East, and Latin America.",
     "Lutron holds over 2,700 patents worldwide, including those for hundreds of lighting and shading control solutions.",
-    "In my fourteen years working with Lutron, I’ve found its products, engineering, and support consistently strong.",
-    "Here’s something that confuses a lot of people: who actually stands behind a Lutron system. Lutron designs and manufactures the equipment, but Lutron doesn’t come to your house. A customer has at least three tiers of support. First, the dealer, an independent company, like mine, that sells, installs, and programs the system. Second, the Lutron sales representative, because Lutron works through a network of sales representatives who support the dealers. And third, Lutron itself.",
+    "In my fourteen years working with Lutron, I’ve found its products, engineering, innovation, and support consistently strong.",
+    "Here’s something, though, that confuses a lot of people: who actually stands behind a Lutron system? Lutron designs and manufactures the equipment, but Lutron doesn’t come to your house. A customer has at least three tiers of support. First, the dealer, an independent company, like mine, that sells, installs, and programs the system. Second, the Lutron sales representative, because Lutron works through a network of sales representatives who support the dealers. And third, [PAUSE] Lutron itself. [PAUSE]",
     "Lutron protects its brand by being very selective when choosing the companies that can sell its more sophisticated products.",
-    "Lutron’s systems are designed to work together with other Lutron products. A Lutron keypad, dimmer, shade, and processor are built to interoperate. They’re generally not designed to mix and match with another manufacturer’s lighting control products. Some people call that a walled garden. The upside is that everything works together the way it’s meant to. The tradeoff is less freedom to combine brands. There are gates, though. Lutron makes its programming interface, its API, available to selected manufacturers of adjacent products. So if you have another control system, it can work with Lutron shades, for example, but only through that interface and only if Lutron has approved the manufacturer.",
-    "So when someone says, “I want Lutron,” that can mean very different things. Lutron’s products range from a few do-it-yourself items you can buy in a store to whole-house systems for large homes. Same company name. Very different projects.",
+    "Lutron’s systems are designed to work seamlessly with Lutron products. A Lutron keypad, dimmer, shade, and processor are built to interoperate with each other. They’re generally not designed to mix and match with another manufacturer’s lighting control products. Some people call that a walled garden. The upside is that everything works together the way it’s meant to. The tradeoff is less freedom to combine brands. There are gates, though. Lutron makes its programming interface, its API, available to selected manufacturers of adjacent products. So if you have another control system, it can control Lutron shades, for example, but only through that interface and only if Lutron has approved the manufacturer of the other control system.",
+    "So when someone says, “I want Lutron,” that can mean very different things. Lutron’s products range from do-it-yourself items you can buy in a store to whole-house systems for large homes. Same company name. Very different projects.",
     "Next time, in Episode 4, we’ll start looking at the many different Lutron solutions.",
     "If you have a question about your own project, put it in the comments. I read them. If you’d like to visit the showroom in person, the number is in the description.",
     "I’ll see you next time."
@@ -397,7 +397,7 @@
     toast(msg ? "[" + k + "] " + msg : "Key: [" + k + "]");
     if (msg) e.preventDefault();
   });
-  $("top").addEventListener("click", function () { setPlaying(false); y = 0; apply(); setVoicePos(-1, false); vTarget = 0; if (conn && conn.open) conn.send({ t: "top" }); });
+  $("top").addEventListener("click", function () { setPlaying(false); y = 0; apply(); setVoicePos(-1, false); vTarget = 0; if (conn && conn.open) { conn.send({ t: "top" }); conn.send({ t: "pos", i: -1, snap: true }); } });
 
   speed.addEventListener("input", function () { save("tp_speed", speed.value); });
   size.addEventListener("input", function () {
@@ -607,6 +607,11 @@
   function sendPos(snap) { if (conn && conn.open) conn.send({ t: "pos", i: vpos, snap: !!snap }); }
 
   // Display side
+  function goTopRemote() {
+    y = 0; apply(); setVoicePos(-1, false); vTarget = 0;
+    vlast = performance.now(); cancelAnimationFrame(vraf); vraf = requestAnimationFrame(vframe);
+    status("Back to the top.");
+  }
   function onRemote(m) {
     if (!m) return;
     if (m.t === "script") {
@@ -618,9 +623,9 @@
       status("Following the other device.");
       vlast = performance.now(); cancelAnimationFrame(vraf); vraf = requestAnimationFrame(vframe);
     } else if (m.t === "pos") {
-      setVoicePos(m.i, !!m.snap);
+      if (m.i < 0) { goTopRemote(); } else { setVoicePos(m.i, !!m.snap); }
     } else if (m.t === "top") {
-      y = 0; apply(); setVoicePos(-1, false); vTarget = 0;
+      goTopRemote();
     }
   }
   $("be-display").addEventListener("click", function () {
