@@ -142,7 +142,7 @@
     <textarea id="script" spellcheck="false" aria-label="Script text"></textarea>
     <div class="row">
       <button id="start" class="primary" type="button">Start prompter</button>
-      <label for="episode" class="pick">Load <select id="episode"><option value="1">Episode 1</option><option value="2">Episode 2</option><option value="3">Episode 3</option></select></label>
+      <label for="episode" class="pick">Load <select id="episode"><option value="1">Episode 1</option><option value="2">Episode 2</option><option value="3">Episode 3</option><option value="4">Episode 4</option></select></label>
       <button id="reset-script" type="button">Load script</button>
     </div>
     <div class="modes">
@@ -233,7 +233,21 @@
     "If you have a question about your own project, put it in the comments. I read them. If you’d like to visit the showroom in person, the number is in the description.",
     "I’ll see you next time."
   ].join("\n\n");
-  var SCRIPTS = { "1": DEFAULT, "2": EP2, "3": EP3 };
+  var EP4 = [
+    "Hi, I’m Ben from Marina Continental Light and Shade. Last time, in Episode 3, I explained what Lutron the company is. This time we start on what Lutron actually sells.",
+    "As always, I’m not a Lutron representative; these are my own views.",
+    "Lutron’s solutions fall into three families: controls, window treatments, and architectural lighting fixtures. This episode is a map. In the episodes that follow, we’ll go through each family in more detail.",
+    "In Episode 1, I said that a lighting control system controls both artificial light and natural light. The three families line up with that idea.",
+    "The first family is controls, and it goes deeper than most people expect. There are several control systems, from the simplest to the most advanced. There are also Lutron standalone devices that work entirely on their own and aren’t members of a control system. The family also includes many different keypads, load controllers, sensors, and even thermostats. And there are different ways for the devices to communicate, wired and wireless. On most projects, controls tie everything else together, so that’s where we’ll start.",
+    "The second family is window treatments, everything from roller shades to draperies. They manage natural light: glare, privacy, and how much daylight comes into a room. When they’re part of the same control system as the lights, one button can close the window treatments and set the lights together. Lutron also allows selected third-party manufacturers to build Lutron hardware into their own window treatments.",
+    "The third family is architectural lighting fixtures. This is the light itself. In this family, Lutron doesn’t only control the light; it produces it. Lutron’s fixtures are built around a technology Lutron calls Intelligent Lighting. We’ll unpack it in the fixtures episodes. And via Lutron’s Native by Design program, selected third-party manufacturers can also build Lutron light engines and drivers into their own fixtures.",
+    "Not every project uses all three families. Some projects are controls only. Some are controls and window treatments. Some are controls and fixtures. For many, many years, those fixtures came from other companies, and on many projects they still do. Other projects are window treatments only, with just a wall switch or a remote. Think of the families as building blocks, not a package.",
+    "Here’s how we’ll go. Controls first, because that decision comes first on a project. Then window treatments, then architectural lighting fixtures. Each family gets more than one episode, because each one has more depth than most people expect.",
+    "Next time, in Episode 5, we start with controls.",
+    "If you have a question about your own project, put it in the comments. I read them. If you’d like to visit the showroom in person, the number is in the description.",
+    "I’ll see you next time."
+  ].join("\n\n");
+  var SCRIPTS = { "1": DEFAULT, "2": EP2, "3": EP3, "4": EP4 };
 
   var $ = function (id) { return document.getElementById(id); };
   var script = $("script"), stage = $("stage"), textEl = $("text"), marker = $("marker"), count = $("count");
