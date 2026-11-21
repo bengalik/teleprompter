@@ -527,7 +527,8 @@
     var tl = T.length, best = -1, bestScore = 0;
     if (!tl) return pos;
     var hi = Math.min(W.length - 1, pos + win);
-    for (var j = pos + 1; j <= hi; j++) {
+    // j = pos is a candidate too ("stay put"): if what was just heard fits the words already passed as well as any later spot, do not jump.
+    for (var j = Math.max(0, pos); j <= hi; j++) {
       if (!W[j] || !same(W[j], T[tl - 1])) continue;
       var score = 1, k = 1, wi = j - 1;
       while (k < Math.min(tl, 4)) {
