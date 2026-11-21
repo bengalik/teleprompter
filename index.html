@@ -546,7 +546,7 @@
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var voiceBtn = $("voice"), statEl = $("voicestat");
-  var voiceOn = false, rec = null, vraf = 0, vlast = 0, lastAdvance = 0, restarts = [];
+  var lastJump = "", voiceOn = false, rec = null, vraf = 0, vlast = 0, lastAdvance = 0, restarts = [];
 
   function status(msg, err) { statEl.textContent = msg || ""; statEl.classList.toggle("err", !!err); }
 
@@ -582,10 +582,20 @@
     for (var i = 0; i < ev.results.length; i++) text += " " + ev.results[i][0].transcript;
     var T = text.split(/\s+/).map(norm).filter(Boolean).slice(-8);
     if (!T.length) return;
-    status("Hearing: " + text.trim().split(/\s+/).slice(-6).join(" "));
     var now = Date.now();
     var win = now - lastAdvance > 6000 ? 90 : 30;
     var next = findPos(T, words.map(function (w) { return w.n; }), vpos, win);
+    if (next > vpos + 3) { lastJump = "JUMP +" + (next - vpos) + " (window " + win + "): heard \"" + T.join(" ") + "\" now at \"" + words.slice(Math.max(0, next - 3), next + 1).map(function (w) { return w.n; }).join(" ") + "\""; }
+    status("Hearing: " + text.trim().split(/\s+/).slice(-6).join(" "));
+    if (lastJump) {
+      var jl = document.getElementById("jumplog");
+      if (!jl) {
+        jl = document.createElement("div"); jl.id = "jumplog";
+        jl.style.cssText = "position:fixed;left:8px;right:8px;bottom:78px;z-index:50;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.85);color:#ffd27a;font:14px/1.35 -apple-system,Helvetica,Arial,sans-serif;pointer-events:none;white-space:normal";
+        document.body.appendChild(jl);
+      }
+      jl.textContent = lastJump;
+    }
     if (next > vpos) { lastAdvance = now; setVoicePos(next, false); sendPos(false); }
   }
 
